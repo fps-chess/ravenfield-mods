@@ -1,7 +1,7 @@
 behaviour("WeaponManager")
 
 --initialize all variables
-local temp, allmodstemplate, modinputs, valname, bombprefab, damagemulttable, dogiveammo, scriptself, processedweapons, savedata, jsonmodule, cfg, datacontainer, mainui, maincanvas, dropdowns, background, inputfields, texts, toggles, buttons, funcs, allelements, changes, allmods, teamtoapply, teamtable, curname, curteamindex, currealteam
+local temp, allmodstemplate, velmulttable, modinputs, valname, bombprefab, damagemulttable, dogiveammo, scriptself, processedweapons, savedata, jsonmodule, cfg, datacontainer, mainui, maincanvas, dropdowns, background, inputfields, texts, toggles, buttons, funcs, allelements, changes, allmods, teamtoapply, teamtable, curname, curteamindex, currealteam
 
 function getchanges()
   --clear list of changes since last time this function was ran
@@ -41,9 +41,6 @@ function WeaponManager:UpdateButton()
 		end
 	end
   --reset all processed weapons, and reprocess all equipped ones
-  for i, v in pairs(processedweapons) do
-    i.onSpawnProjectiles.RemoveListener(self, "projectilehook")
-  end
 	processedweapons = {}
 	for i, v in pairs(ActorManager.actors) do
 		if v.activeWeapon then
@@ -98,7 +95,8 @@ function WeaponManager:Start()
 			UnlimitedSpare = false,
 			ReloadMult = 1,
       SpreadMult = 1,
-      FireBombs = false
+      FireBombs = false,
+      VelMult = 1
 		},
 		Eagle = {
 			DmgMult = 1,
@@ -111,7 +109,8 @@ function WeaponManager:Start()
 			UnlimitedSpare = false,
 			ReloadMult = 1,
       SpreadMult = 1,
-      FireBombs = false
+      FireBombs = false,
+      VelMult = 1
 		},
 		Raven = {
 			DmgMult = 1,
@@ -124,7 +123,8 @@ function WeaponManager:Start()
 			UnlimitedSpare = false,
 			ReloadMult = 1,
       SpreadMult = 1,
-      FireBombs = false
+      FireBombs = false,
+      VelMult = 1
 		},
 		Self = {
 			DmgMult = 1,
@@ -137,13 +137,15 @@ function WeaponManager:Start()
 			UnlimitedSpare = false,
 			ReloadMult = 1,
       SpreadMult = 1,
-      FireBombs = false
+      FireBombs = false,
+      VelMult = 1
 		}
 	}
   scriptself = self
   --establish tables
 	damagemulttable = {}
 	processedweapons = {}
+  velmulttable = {}
 	allmods = allmodstemplate
   --get all config values
 	cfg = {
@@ -215,6 +217,17 @@ function WeaponManager:Start()
 				damagemulttable[weapon] = allmods.Self.DmgMult
 			end
 		end,
+    VelMult = function(weapon, team)
+      velmulttable[weapon] = allmods.All.VelMult
+			if team == Team.Blue and allmods.Eagle.VelMult ~= 1 then
+				velmulttable[weapon] = allmods.Eagle.VelMult
+			elseif team == Team.Red and allmods.Raven.VelMult ~= 1 then
+				velmulttable[weapon] = allmods.Raven.VelMult
+			end
+			if weapon.user.isPlayer and allmods.Self.VelMult ~= 1 then
+				velmulttable[weapon] = allmods.Self.VelMult
+			end
+    end,
 		FireCDMult = function(weapon, team)
       valname = "FireCDMult"
       attribute = "cooldown"
@@ -433,9 +446,6 @@ function WeaponManager:Import()
       allmods.Self[i] = allmodstemplate.Self[i]
     end
   end
-  for i, v in pairs(processedweapons) do
-    i.onSpawnProjectiles.RemoveListener(scriptself, "projectilehook")
-  end
 	processedweapons = {}
 end
 
@@ -444,6 +454,12 @@ function WeaponManager:projectilehook(proj)
     if v.sourceWeapon and damagemulttable[v.sourceWeapon] then --following line will error without this check if player is dead (therefore v.sourceWeapon will be nil)
 		  v.damage = v.damage * damagemulttable[v.sourceWeapon]
     end
+    if v.sourceWeapon and velmulttable[v.sourceWeapon] then
+      temp = Vector3.one
+      temp.Set(v.velocity.x * velmulttable[v.sourceWeapon], v.velocity.y * velmulttable[v.sourceWeapon], v.velocity.z * velmulttable[v.sourceWeapon])
+      v.velocity = temp
+    end
+  end
 end
 
 
@@ -1259,5 +1275,3 @@ if always_try_using_lpeg then
   pcall (json.use_lpeg)
 end
 jsonmodule = json
-return json
-end
