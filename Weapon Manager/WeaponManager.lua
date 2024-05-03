@@ -1,8 +1,7 @@
 behaviour("WeaponManager")
 
 --initialize all variables
-local temp, modinputs, valname, damagemulttable, dogiveammo, processedweapons, savedata, jsonmodule, cfg, datacontainer, mainui, maincanvas, dropdowns, background, inputfields, texts, toggles, buttons, funcs, allelements, changes, allmods, teamtoapply, teamtable, curname, curteamindex, currealteam
-
+local temp, allmodstemplate, modinputs, valname, bombprefab, damagemulttable, dogiveammo, scriptself, processedweapons, savedata, jsonmodule, cfg, datacontainer, mainui, maincanvas, dropdowns, background, inputfields, texts, toggles, buttons, funcs, allelements, changes, allmods, teamtoapply, teamtable, curname, curteamindex, currealteam
 
 function getchanges()
   --clear list of changes since last time this function was ran
@@ -42,6 +41,9 @@ function WeaponManager:UpdateButton()
 		end
 	end
   --reset all processed weapons, and reprocess all equipped ones
+  for i, v in pairs(processedweapons) do
+    i.onSpawnProjectiles.RemoveListener(self, "projectilehook")
+  end
 	processedweapons = {}
 	for i, v in pairs(ActorManager.actors) do
 		if v.activeWeapon then
@@ -69,13 +71,22 @@ function getRealTeamFromTeamIndex(teamindex)
 		return Team.Red
 	end
 end
-
+function processweapon(weapon, parentactor, parentteam)
+  if weapon then
+    if weapon.weaponEntry then
+      if weapon.weaponEntry.prefabWeapon then
+        for i, v in pairs(funcs) do
+          v(weapon, parentteam)
+        end
+      end
+    end
+  end
+  weapon.onSpawnProjectiles.addListener(scriptself, "projectilehook")
+	processedweapons[weapon] = true
+end
 --this is just a clusterfuck of all the things i needed it to do on startup
 function WeaponManager:Start()
-  --establish tables
-	damagemulttable = {}
-	processedweapons = {}
-	allmods = {
+  allmodstemplate = {
 		All = {
 			DmgMult = 1,
 			FireCDMult = 1,
@@ -86,7 +97,8 @@ function WeaponManager:Start()
 			MagSizeMult = 1,
 			UnlimitedSpare = false,
 			ReloadMult = 1,
-      SpreadMult = 1
+      SpreadMult = 1,
+      FireBombs = false
 		},
 		Eagle = {
 			DmgMult = 1,
@@ -98,7 +110,8 @@ function WeaponManager:Start()
 			MagSizeMult = 1,
 			UnlimitedSpare = false,
 			ReloadMult = 1,
-      SpreadMult = 1
+      SpreadMult = 1,
+      FireBombs = false
 		},
 		Raven = {
 			DmgMult = 1,
@@ -110,7 +123,8 @@ function WeaponManager:Start()
 			MagSizeMult = 1,
 			UnlimitedSpare = false,
 			ReloadMult = 1,
-      SpreadMult = 1
+      SpreadMult = 1,
+      FireBombs = false
 		},
 		Self = {
 			DmgMult = 1,
@@ -122,9 +136,15 @@ function WeaponManager:Start()
 			MagSizeMult = 1,
 			UnlimitedSpare = false,
 			ReloadMult = 1,
-      SpreadMult = 1
+      SpreadMult = 1,
+      FireBombs = false
 		}
 	}
+  scriptself = self
+  --establish tables
+	damagemulttable = {}
+	processedweapons = {}
+	allmods = allmodstemplate
   --get all config values
 	cfg = {
 		openKB = KeyCode[self.script.mutator.GetConfigurationString("openKB")],
@@ -141,6 +161,7 @@ function WeaponManager:Start()
   --instantiate ui, and store our stuff
 	allelements = {}
 	datacontainer = self.script.gameObject.GetComponent(DataContainer)
+  bombprefab = datacontainer.GetGameObject("BombPrefab")
 	mainui = GameObject.Instantiate(datacontainer.GetGameObject("MainUI"))
 	maincanvas = mainui.GetComponentInChildren(Canvas)
 	dropdowns = mainui.GetComponentsInChildren(Dropdown)
@@ -184,7 +205,6 @@ function WeaponManager:Start()
 
     end,]]
 		DmgMult = function(weapon, team)
-			weapon.onSpawnProjectiles.addListener(self, "projectiledamagehook")
 			damagemulttable[weapon] = allmods.All.DmgMult
 			if team == Team.Blue and allmods.Eagle.DmgMult ~= 1 then
 				damagemulttable[weapon] = allmods.Eagle.DmgMult
@@ -287,6 +307,39 @@ function WeaponManager:Start()
       if weapon.user.isPlayer and allmods.Self[valname] ~= 1 then
         weapon[attribute] = weapon.weaponEntry.prefabWeapon[attribute] * allmods.Self[valname]
       end
+      valname = "SpreadMult"
+      attribute = "maxSpreadAim"
+      weapon.followupSpread[attribute] = weapon.weaponEntry.prefabWeapon.followupSpread[attribute] * allmods.All[valname]
+      if team == Team.Blue and allmods.Eagle[valname] ~= 1 then
+        weapon.followupSpread[attribute] = weapon.weaponEntry.prefabWeapon.followupSpread[attribute] * allmods.Eagle[valname]
+      elseif team == Team.Red and allmods.Raven[valname] ~= 1 then
+        weapon.followupSpread[attribute] = weapon.weaponEntry.prefabWeapon.followupSpread[attribute] * allmods.Raven[valname]
+      end
+      if weapon.user.isPlayer and allmods.Self[valname] ~= 1 then
+        weapon.followupSpread[attribute] = weapon.weaponEntry.prefabWeapon.followupSpread[attribute] * allmods.Self[valname]
+      end
+      valname = "SpreadMult"
+      attribute = "maxSpreadHip"
+      weapon.followupSpread[attribute] = weapon.weaponEntry.prefabWeapon.followupSpread[attribute] * allmods.All[valname]
+      if team == Team.Blue and allmods.Eagle[valname] ~= 1 then
+        weapon.followupSpread[attribute] = weapon.weaponEntry.prefabWeapon.followupSpread[attribute] * allmods.Eagle[valname]
+      elseif team == Team.Red and allmods.Raven[valname] ~= 1 then
+        weapon.followupSpread[attribute] = weapon.weaponEntry.prefabWeapon.followupSpread[attribute] * allmods.Raven[valname]
+      end
+      if weapon.user.isPlayer and allmods.Self[valname] ~= 1 then
+        weapon.followupSpread[attribute] = weapon.weaponEntry.prefabWeapon.followupSpread[attribute] * allmods.Self[valname]
+      end
+      valname = "SpreadMult"
+      attribute = "spreadGain"
+      weapon.followupSpread[attribute] = weapon.weaponEntry.prefabWeapon.followupSpread[attribute] * allmods.All[valname]
+      if team == Team.Blue and allmods.Eagle[valname] ~= 1 then
+        weapon.followupSpread[attribute] = weapon.weaponEntry.prefabWeapon.followupSpread[attribute] * allmods.Eagle[valname]
+      elseif team == Team.Red and allmods.Raven[valname] ~= 1 then
+        weapon.followupSpread[attribute] = weapon.weaponEntry.prefabWeapon.followupSpread[attribute] * allmods.Raven[valname]
+      end
+      if weapon.user.isPlayer and allmods.Self[valname] ~= 1 then
+        weapon.followupSpread[attribute] = weapon.weaponEntry.prefabWeapon.followupSpread[attribute] * allmods.Self[valname]
+      end
     end,
 		ForceAuto = function(weapon, team)
       if allmods.All.ForceAuto then
@@ -323,8 +376,27 @@ function WeaponManager:Start()
         weapon.spareAmmo = weapon.weaponEntry.prefabWeapon.maxSpareAmmo
         weapon.maxSpareAmmo = weapon.weaponEntry.prefabWeapon.maxSpareAmmo
       end
-		end
+		end,
+    FireBombs = function(weapon, team)
+      if allmods.All.FireBombs then
+        weapon.SetProjectilePrefab(bombprefab)
+      elseif team == Team.Blue and allmods.Eagle.FireBombs then
+        weapon.SetProjectilePrefab(bombprefab)
+      elseif team == Team.Red and allmods.Raven.FireBombs then
+        weapon.SetProjectilePrefab(bombprefab)
+      elseif weapon.user.isPlayer and allmods.Self.FireBombs then
+        weapon.SetProjectilePrefab(bombprefab)
+      end
+    end
 	}
+  for i, v in pairs(funcs) do
+    if not allmods.All[i] then
+      allmods.All[i] = allmodstemplate.All[i]
+      allmods.Eagle[i] = allmodstemplate.Eagle[i]
+      allmods.Raven[i] = allmodstemplate.Raven[i]
+      allmods.Self[i] = allmodstemplate.Self[i]
+    end
+  end
 	allelements.UpdateButton.onClick.AddListener(self, "UpdateButton")
 	allelements.SaveButton.onClick.AddListener(self, "Save")
 	allelements.ExportButton.onClick.AddListener(self, "Export")
@@ -333,6 +405,7 @@ end
 function WeaponManager:Update()
 	if Input.GetKeyDown(cfg.openKB) then
 		maincanvas.enabled = not maincanvas.enabled
+    if maincanvas.enabled then Screen.UnlockCursor() else Screen.LockCursor() end
 	end
 	for i, v in pairs(ActorManager.actors) do
 		if not processedweapons[v.activeWeapon] then
@@ -352,26 +425,25 @@ end
 
 function WeaponManager:Import()
 	allmods = jsonmodule.decode(allelements.ImportField.text)
+  for i, v in pairs(funcs) do
+    if not allmods.All[i] then
+      allmods.All[i] = allmodstemplate.All[i]
+      allmods.Eagle[i] = allmodstemplate.Eagle[i]
+      allmods.Raven[i] = allmodstemplate.Raven[i]
+      allmods.Self[i] = allmodstemplate.Self[i]
+    end
+  end
+  for i, v in pairs(processedweapons) do
+    i.onSpawnProjectiles.RemoveListener(scriptself, "projectilehook")
+  end
 	processedweapons = {}
 end
 
-function WeaponManager:projectiledamagehook(proj)
+function WeaponManager:projectilehook(proj)
 	for i, v in pairs(proj) do
-		v.damage = v.damage * damagemulttable[v.sourceWeapon]
-	end
-end
-
-function processweapon(weapon, parentactor, parentteam)
-  if weapon then
-    if weapon.weaponEntry then
-      if weapon.weaponEntry.prefabWeapon then
-        for i, v in pairs(funcs) do
-          v(weapon, parentteam)
-        end
-      end
+    if v.sourceWeapon and damagemulttable[v.sourceWeapon] then --following line will error without this check if player is dead (therefore v.sourceWeapon will be nil)
+		  v.damage = v.damage * damagemulttable[v.sourceWeapon]
     end
-  end
-	processedweapons[weapon] = true
 end
 
 
@@ -1188,5 +1260,4 @@ if always_try_using_lpeg then
 end
 jsonmodule = json
 return json
-
--->
+end
